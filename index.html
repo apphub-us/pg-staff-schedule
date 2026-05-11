@@ -64,17 +64,20 @@ body{display:flex;flex-direction:column}
 .view.active{display:block}
 
 /* Schedule grid */
-.schedule-wrap{padding:12px}
-.emp-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
-.emp-header{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border)}
-.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;color:var(--accent);flex-shrink:0}
-.emp-name{font-size:14px;font-weight:500;flex:1}
-.emp-stats{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
-.days-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:8px}
-.day-cell{display:flex;flex-direction:column;align-items:center;gap:3px}
-.day-label{font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase}
-.day-label.weekend{color:var(--red)}
-.shift-btn{width:100%;aspect-ratio:1;border-radius:6px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;font-family:'DM Mono',monospace;transition:all .15s;color:var(--muted)}
+.schedule-wrap{padding:8px 12px}
+.sched-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.sched-table th{font-size:10px;font-weight:500;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;padding:6px 4px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap}
+.sched-table th.name-th{text-align:left;padding-left:10px;width:130px}
+.sched-table th.weekend{color:var(--red)}
+.sched-table td{padding:3px 3px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle}
+.sched-table td.name-td{text-align:left;padding-left:10px;white-space:nowrap}
+.sched-table td.actions-td{white-space:nowrap;padding:2px 6px;width:56px}
+.sched-table td.count-td{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);width:28px}
+.sched-table tr:hover td{background:rgba(255,255,255,0.03)}
+.emp-name-wrap{display:flex;align-items:center;gap:6px}
+.avatar{width:22px;height:22px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:9px;font-weight:500;color:var(--accent);flex-shrink:0}
+.emp-name{font-size:13px;font-weight:500}
+.shift-btn{width:100%;height:28px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;font-family:'DM Mono',monospace;transition:all .15s;color:var(--muted);min-width:32px}
 .shift-btn.M{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
 .shift-btn.A{background:var(--green-dim);border-color:var(--green);color:var(--green)}
 .shift-btn.N{background:var(--purple-dim);border-color:var(--purple);color:var(--purple)}
@@ -235,30 +238,28 @@ function initials(name){return name.split(' ').map(function(w){return w[0]||''})
 function render(){
   var ws=getWS(state.weekOff),we=new Date(ws);we.setDate(ws.getDate()+6);
   document.getElementById('wlabel').textContent=fd(ws)+'–'+fd(we);
-  var html='';
+  var html='<table class="sched-table"><thead><tr><th class="name-th">Employee</th>';
+  for(var d=0;d<7;d++){
+    var dd=new Date(ws);dd.setDate(ws.getDate()+d);
+    var isWe=d>=5;
+    html+='<th class="'+(isWe?'weekend':'')+'">'+DAYS[d]+'<br><span style="font-size:9px;font-weight:400">'+fd(dd)+'</span></th>';
+  }
+  html+='<th style="width:28px"></th><th style="width:56px"></th></tr></thead><tbody>';
   state.employees.forEach(function(emp){
     var count=0;
     for(var d=0;d<7;d++){var s=state.schedule[ekey(emp.name,d)]||'';if(s&&s!=='X'&&s!=='S')count++;}
     var i=state.employees.indexOf(emp);
-    html+='<div class="emp-card">';
-    html+='<div class="emp-header"><div class="avatar">'+initials(emp.name)+'</div>';
-    html+='<div class="emp-name">'+emp.name+'</div>';
-    html+='<div class="emp-stats">'+count+'d</div>';
-    html+='<button class="icon-btn" onclick="editEmp('+i+')" aria-label="Edit">✎</button>';
-    html+='<button class="icon-btn danger" onclick="deleteEmp('+i+')" aria-label="Delete">✕</button>';
-    html+='</div>';
-    html+='<div class="days-row">';
+    var safe=emp.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    html+='<tr><td class="name-td"><div class="emp-name-wrap"><div class="avatar">'+initials(emp.name)+'</div><span class="emp-name">'+emp.name+'</span></div></td>';
     for(var d=0;d<7;d++){
       var k=ekey(emp.name,d),s=state.schedule[k]||'';
-      var isWe=d>=5;
-      html+='<div class="day-cell">';
-      html+='<div class="day-label'+(isWe?' weekend':'')+'">'+DAYS[d]+'</div>';
-      var safe=emp.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      html+='<button class="shift-btn '+s+'" onclick="cycleShift(\''+safe+'\','+d+')">'+SLABELS[s]+'</button>';
-      html+='</div>';
+      html+='<td><button class="shift-btn '+s+'" onclick="cycleShift(\''+safe+'\','+d+')">'+SLABELS[s]+'</button></td>';
     }
-    html+='</div></div>';
+    html+='<td class="count-td">'+count+'d</td>';
+    html+='<td class="actions-td"><button class="icon-btn" onclick="editEmp('+i+')" aria-label="Edit">✎</button> <button class="icon-btn danger" onclick="deleteEmp('+i+')" aria-label="Delete">✕</button></td>';
+    html+='</tr>';
   });
+  html+='</tbody></table>';
   document.getElementById('sched-wrap').innerHTML=html;
 }
 
