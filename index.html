@@ -84,6 +84,7 @@ body{display:flex;flex-direction:column}
 .shift-btn.X{background:var(--amber-dim);border-color:var(--amber);color:var(--amber)}
 .shift-btn.S{background:var(--red-dim);border-color:var(--red);color:var(--red)}
 .shift-btn:active{transform:scale(0.92)}
+.hours-input{display:block;width:100%;margin-top:2px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--text);font-size:9px;font-family:'DM Mono',monospace;padding:2px 3px;text-align:center;}
 
 /* Add employee */
 .icon-btn{background:none;border:1px solid var(--border);color:var(--muted);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -194,85 +195,78 @@ body{display:flex;flex-direction:column}
 <script>
 var SHIFTS = ['','M','A','N','X','S'];
 var SLABELS = {'':'–','M':'M','A':'A','N':'N','X':'O','S':'SK'};
-var SNAMES = {'M':'morning (6-14)','A':'afternoon (14-22)','N':'night (22-6)','X':'off','S':'sick','':'none'};
 var DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 var state = JSON.parse(localStorage.getItem('pg_state') || 'null') || {
   employees: [
-    {name:'Jan Kowalski',pref:'M'},
-    {name:'Anna Nowak',pref:'A'},
-    {name:'Piotr Wiśniewski',pref:'M'},
-    {name:'Maria Zielińska',pref:'N'}
+    {name:'Jan Kowalski'},{name:'Anna Nowak'},{name:'Piotr Wisniewski'},{name:'Maria Zielinska'}
   ],
   schedule: {},
   weekOff: 0
 };
 
 function save(){localStorage.setItem('pg_state',JSON.stringify(state))}
-
-function getWS(off){
-  var d=new Date(),day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);
-  d.setDate(diff+off*7);d.setHours(0,0,0,0);return d;
-}
+function getWS(off){var d=new Date(),day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);d.setDate(diff+off*7);d.setHours(0,0,0,0);return d;}
 function fd(d){return d.getDate()+'.'+(d.getMonth()+1).toString().padStart(2,'0')}
-function ekey(n,di){return state.weekOff+'_'+n+'_'+di}
+function skey(n,di){return state.weekOff+'_'+n+'_'+di+'_shift'}
+function hkey(n,di){return state.weekOff+'_'+n+'_'+di+'_hours'}
 function prevW(){state.weekOff--;save();render()}
 function nextW(){state.weekOff++;save();render()}
 
+function parseHours(str){
+  if(!str||!str.trim())return 0;
+  var m=str.trim().match(/^(\d{1,2}):?(\d{2})?\s*[-–]\s*(\d{1,2}):?(\d{2})?$/);
+  if(!m)return 0;
+  var s=parseInt(m[1])*60+(parseInt(m[2]||0));
+  var e=parseInt(m[3])*60+(parseInt(m[4]||0));
+  if(e<s)e+=24*60;
+  return Math.max(0,Math.round((e-s)/60*10)/10);
+}
+
 function cycleShift(n,di){
-  var k=ekey(n,di),cur=state.schedule[k]||'',idx=SHIFTS.indexOf(cur);
+  var k=skey(n,di),cur=state.schedule[k]||'',idx=SHIFTS.indexOf(cur);
   state.schedule[k]=SHIFTS[(idx+1)%SHIFTS.length];
+  if(state.schedule[k]==='X'||state.schedule[k]==='S'||state.schedule[k]===''){
+    delete state.schedule[hkey(n,di)];
+  }
   save();render();
+}
+
+function saveHours(n,di,val){
+  if(val.trim()){state.schedule[hkey(n,di)]=val.trim();}
+  else{delete state.schedule[hkey(n,di)];}
+  save();
+}
+
+function initials(name){return name.split(' ').map(function(w){return w[0]||''}).join('').slice(0,2).toUpperCase()}
+
+function empTotalHours(emp){
+  var total=0;
+  for(var d=0;d<7;d++){
+    var h=state.schedule[hkey(emp.name,d)]||'';
+    total+=parseHours(h);
+  }
+  return Math.round(total*10)/10;
 }
 
 function addEmp(){
   var v=document.getElementById('new-emp').value.trim();
   if(!v)return;
-  state.employees.push({name:v,pref:'M'});
+  state.employees.push({name:v});
   document.getElementById('new-emp').value='';
   save();render();
-}
-
-function initials(name){return name.split(' ').map(function(w){return w[0]||''}).join('').slice(0,2).toUpperCase()}
-
-function render(){
-  var ws=getWS(state.weekOff),we=new Date(ws);we.setDate(ws.getDate()+6);
-  document.getElementById('wlabel').textContent=fd(ws)+'–'+fd(we);
-  var html='<table class="sched-table"><thead><tr><th class="name-th">Employee</th>';
-  for(var d=0;d<7;d++){
-    var dd=new Date(ws);dd.setDate(ws.getDate()+d);
-    var isWe=d>=5;
-    html+='<th class="'+(isWe?'weekend':'')+'">'+DAYS[d]+'<br><span style="font-size:9px;font-weight:400">'+fd(dd)+'</span></th>';
-  }
-  html+='<th style="width:28px"></th><th style="width:56px"></th></tr></thead><tbody>';
-  state.employees.forEach(function(emp){
-    var count=0;
-    for(var d=0;d<7;d++){var s=state.schedule[ekey(emp.name,d)]||'';if(s&&s!=='X'&&s!=='S')count++;}
-    var i=state.employees.indexOf(emp);
-    var safe=emp.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    html+='<tr><td class="name-td"><div class="emp-name-wrap"><div class="avatar">'+initials(emp.name)+'</div><span class="emp-name">'+emp.name+'</span></div></td>';
-    for(var d=0;d<7;d++){
-      var k=ekey(emp.name,d),s=state.schedule[k]||'';
-      html+='<td><button class="shift-btn '+s+'" onclick="cycleShift(\''+safe+'\','+d+')">'+SLABELS[s]+'</button></td>';
-    }
-    html+='<td class="count-td">'+count+'d</td>';
-    html+='<td class="actions-td"><button class="icon-btn" onclick="editEmp('+i+')" aria-label="Edit">✎</button> <button class="icon-btn danger" onclick="deleteEmp('+i+')" aria-label="Delete">✕</button></td>';
-    html+='</tr>';
-  });
-  html+='</tbody></table>';
-  document.getElementById('sched-wrap').innerHTML=html;
 }
 
 function editEmp(i){
   var emp=state.employees[i];
   var newName=prompt('Edit name:',emp.name);
-  if(!newName||!newName.trim())return;
+  if(!newName||!newName.trim()||newName.trim()===emp.name)return;
   newName=newName.trim();
-  if(newName===emp.name)return;
-  // migrate schedule keys
   for(var d=0;d<7;d++){
-    var oldKey=ekey(emp.name,d),newKey=state.weekOff+'_'+newName+'_'+d;
-    if(state.schedule[oldKey]!==undefined){state.schedule[newKey]=state.schedule[oldKey];delete state.schedule[oldKey];}
+    var ok=skey(emp.name,d),nk=state.weekOff+'_'+newName+'_'+d+'_shift';
+    var ohk=hkey(emp.name,d),nhk=state.weekOff+'_'+newName+'_'+d+'_hours';
+    if(state.schedule[ok]!==undefined){state.schedule[nk]=state.schedule[ok];delete state.schedule[ok];}
+    if(state.schedule[ohk]!==undefined){state.schedule[nhk]=state.schedule[ohk];delete state.schedule[ohk];}
   }
   state.employees[i].name=newName;
   save();render();
@@ -280,11 +274,42 @@ function editEmp(i){
 
 function deleteEmp(i){
   var emp=state.employees[i];
-  if(!confirm('Remove '+emp.name+' from the schedule?'))return;
-  // clean schedule
-  for(var d=0;d<7;d++){delete state.schedule[ekey(emp.name,d)];}
+  if(!confirm('Remove '+emp.name+'?'))return;
+  for(var d=0;d<7;d++){delete state.schedule[skey(emp.name,d)];delete state.schedule[hkey(emp.name,d)];}
   state.employees.splice(i,1);
   save();render();
+}
+
+function render(){
+  var ws=getWS(state.weekOff),we=new Date(ws);we.setDate(ws.getDate()+6);
+  document.getElementById('wlabel').textContent=fd(ws)+'–'+fd(we);
+  var html='<table class="sched-table"><thead><tr><th class="name-th">Employee</th>';
+  for(var d=0;d<7;d++){
+    var dd=new Date(ws);dd.setDate(ws.getDate()+d);
+    html+='<th class="'+(d>=5?'weekend':'')+'">'+DAYS[d]+'<br><span style="font-size:9px;font-weight:400">'+fd(dd)+'</span></th>';
+  }
+  html+='<th style="width:36px;text-align:center;font-size:10px">hrs</th><th style="width:56px"></th></tr></thead><tbody>';
+  state.employees.forEach(function(emp){
+    var totalH=empTotalHours(emp);
+    var i=state.employees.indexOf(emp);
+    var safe=emp.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    html+='<tr><td class="name-td"><div class="emp-name-wrap"><div class="avatar">'+initials(emp.name)+'</div><span class="emp-name">'+emp.name+'</span></div></td>';
+    for(var d=0;d<7;d++){
+      var sk=skey(emp.name,d),hk=hkey(emp.name,d);
+      var s=state.schedule[sk]||'',h=state.schedule[hk]||'';
+      var canHours=(s&&s!=='X'&&s!=='S');
+      html+='<td style="padding:2px 3px"><button class="shift-btn '+s+'" onclick="cycleShift(\''+safe+'\','+d+')">'+SLABELS[s]+'</button>';
+      if(canHours){
+        html+='<input class="hours-input" type="text" value="'+h+'" placeholder="7:00-15:00" onchange="saveHours(\''+safe+'\','+d+',this.value)" onclick="event.stopPropagation()">';
+      }
+      html+='</td>';
+    }
+    html+='<td class="count-td">'+(totalH>0?totalH:'–')+'</td>';
+    html+='<td class="actions-td"><button class="icon-btn" onclick="editEmp('+i+')" aria-label="Edit">✎</button> <button class="icon-btn danger" onclick="deleteEmp('+i+')" aria-label="Delete">✕</button></td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('sched-wrap').innerHTML=html;
 }
 
 function showView(id,tab){
@@ -297,33 +322,30 @@ function showView(id,tab){
 }
 
 function renderStats(){
-  var ws=getWS(state.weekOff);
-  var totals={M:0,A:0,N:0,X:0,S:0,total:0};
   var empData=state.employees.map(function(emp){
-    var counts={M:0,A:0,N:0,X:0,S:0};
-    for(var d=0;d<7;d++){var s=state.schedule[ekey(emp.name,d)]||'';if(s)counts[s]=(counts[s]||0)+1;}
-    var work=counts.M+counts.A+counts.N;
-    Object.keys(counts).forEach(function(k){totals[k]=(totals[k]||0)+counts[k]});
-    totals.total+=work;
-    return {name:emp.name,counts:counts,work:work};
+    var total=0,sick=0,off=0;
+    for(var d=0;d<7;d++){
+      var s=state.schedule[skey(emp.name,d)]||'';
+      var h=parseHours(state.schedule[hkey(emp.name,d)]||'');
+      total+=h;
+      if(s==='S')sick++;
+      if(s==='X')off++;
+    }
+    return {name:emp.name,total:Math.round(total*10)/10,sick:sick,off:off};
   });
-  var maxWork=Math.max.apply(null,empData.map(function(e){return e.work}))||1;
+  var maxH=Math.max.apply(null,empData.map(function(e){return e.total}))||1;
+  var grandTotal=Math.round(empData.reduce(function(a,e){return a+e.total},0)*10)/10;
+  var totalSick=empData.reduce(function(a,e){return a+e.sick},0);
   var html='<div class="summary-grid">';
-  html+='<div class="summary-box"><div class="val">'+totals.total+'</div><div class="lbl">shifts this week</div></div>';
-  html+='<div class="summary-box"><div class="val" style="color:var(--red)">'+totals.S+'</div><div class="lbl">absences</div></div>';
-  html+='<div class="summary-box"><div class="val" style="color:var(--accent)">'+totals.M+'</div><div class="lbl">morning shifts</div></div>';
-  html+='<div class="summary-box"><div class="val" style="color:var(--green)">'+totals.A+'</div><div class="lbl">afternoon shifts</div></div>';
+  html+='<div class="summary-box"><div class="val">'+grandTotal+'</div><div class="lbl">total hours</div></div>';
+  html+='<div class="summary-box"><div class="val" style="color:var(--red)">'+totalSick+'</div><div class="lbl">sick days</div></div>';
+  html+='<div class="summary-box"><div class="val" style="color:var(--accent)">'+empData.length+'</div><div class="lbl">employees</div></div>';
+  html+='<div class="summary-box"><div class="val" style="color:var(--green)">'+(empData.length?Math.round(grandTotal/empData.length*10)/10:0)+'</div><div class="lbl">avg hrs/person</div></div>';
   html+='</div>';
-  html+='<div class="stat-card"><div class="stat-card-title">Workload per employee</div>';
-  empData.sort(function(a,b){return b.work-a.work}).forEach(function(e){
-    var pct=Math.round(e.work/maxWork*100);
-    html+='<div class="stat-row"><span>'+e.name+'</span><div class="stat-bar-wrap"><div class="stat-bar" style="width:'+pct+'%"></div></div><span class="stat-num">'+e.work+'</span></div>';
-  });
-  html+='</div>';
-  html+='<div class="stat-card"><div class="stat-card-title">Shift distribution</div>';
-  [{k:'M',label:'Morning',c:'var(--accent)'},{k:'A',label:'Afternoon',c:'var(--green)'},{k:'N',label:'Night',c:'var(--purple)'},{k:'X',label:'Days off',c:'var(--amber)'},{k:'S',label:'Sick',c:'var(--red)'}].forEach(function(item){
-    var pct=totals.total>0?Math.round((totals[item.k]||0)/totals.total*100):0;
-    html+='<div class="stat-row"><span>'+item.label+'</span><div class="stat-bar-wrap"><div class="stat-bar" style="width:'+Math.max(pct,2)+'%;background:'+item.c+'"></div></div><span class="stat-num">'+(totals[item.k]||0)+'</span></div>';
+  html+='<div class="stat-card"><div class="stat-card-title">Hours per employee</div>';
+  empData.slice().sort(function(a,b){return b.total-a.total}).forEach(function(e){
+    var pct=Math.round(e.total/maxH*100);
+    html+='<div class="stat-row"><span>'+e.name+'</span><div class="stat-bar-wrap"><div class="stat-bar" style="width:'+Math.max(pct,2)+'%"></div></div><span class="stat-num">'+e.total+'h</span></div>';
   });
   html+='</div>';
   document.getElementById('stats-content').innerHTML=html;
@@ -331,8 +353,7 @@ function renderStats(){
 
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
 
-var chatHistory=[];
-var aiLoading=false;
+var chatHistory=[],aiLoading=false;
 
 function addBubble(role,html){
   var msgs=document.getElementById('chat-msgs');
@@ -349,8 +370,12 @@ function getCtx(){
   var lines=['Week: '+fd(ws)];
   state.employees.forEach(function(emp){
     var days=[];
-    for(var d=0;d<7;d++){var s=state.schedule[ekey(emp.name,d)]||'';days.push(DAYS[d]+':'+(s?SNAMES[s]:'brak'))}
-    lines.push(emp.name+'(pref:'+emp.pref+'): '+days.join(', '));
+    for(var d=0;d<7;d++){
+      var s=state.schedule[skey(emp.name,d)]||'';
+      var h=state.schedule[hkey(emp.name,d)]||'';
+      days.push(DAYS[d]+':'+(s||'–')+(h?' ('+h+')':''));
+    }
+    lines.push(emp.name+' ['+empTotalHours(emp)+'h]: '+days.join(', '));
   });
   return lines.join('\n');
 }
@@ -363,29 +388,15 @@ async function sendMsg(){
   aiLoading=true;
   addBubble('user',txt);
   var typing=addBubble('ai','<div class="typing-bubble"><span></span><span></span><span></span></div>');
-
-  var sys='You are a work schedule planning assistant for a small electrical company PG.\n'+
-    'Masz dostęp do grafiku:\n'+getCtx()+'\n\n'+
-    'Zasady:\n'+
-    '1. When someone is sick/absent – suggest a specific replacement with reasoning (workload, shift preference, days off this week).\n'+
-    '2. Be concise – max 4 sentences. Use names. No long lists.\n'+
-    '3. You can suggest changes in format [ACTION:{"emp":"Jan Kowalski","day":2,"shift":"A","label":"Assign Jan Wednesday A"}]\n'+
-    '4. Reply in English. Tone: direct, like a good foreman.\n'+
-    '5. If someone asks about optimization – check who has too many/few shifts.';
-
+  var sys='You are a scheduling assistant for a small electrical company PG.\nCurrent schedule:\n'+getCtx()+'\n\nRules:\n1. When someone is sick/absent – suggest a specific replacement based on their hours worked this week (prefer less loaded employees).\n2. Be concise – max 4 sentences. Use names.\n3. You can suggest shift assignments in format [ACTION:{"emp":"Jan Kowalski","day":2,"shift":"M","label":"Assign Jan Wednesday M"}]\n4. Reply in English. Tone: direct, like a good foreman.';
   var msgs=chatHistory.concat([{role:'user',content:txt}]);
   try{
-    var r=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:sys,messages:msgs})
-    });
+    var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:sys,messages:msgs})});
     var data=await r.json();
     var aiText=data.content&&data.content[0]?data.content[0].text:'Error.';
     chatHistory.push({role:'user',content:txt});
     chatHistory.push({role:'assistant',content:aiText});
     if(chatHistory.length>12)chatHistory=chatHistory.slice(-12);
-
     var actions=[];
     var cleaned=aiText.replace(/\[ACTION:(\{[^\}]+\})\]/g,function(_,j){try{actions.push(JSON.parse(j))}catch(e){}return ''});
     var fmted=cleaned.trim().replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
@@ -405,15 +416,14 @@ async function sendMsg(){
 }
 
 function applyAction(emp,day,shift){
-  state.schedule[ekey(emp,day)]=shift;
+  state.schedule[skey(emp,day)]=shift;
   save();render();
-  addBubble('ai','<b>Done</b> — shift updated in the schedule.');
+  addBubble('ai','<b>Done</b> — shift updated.');
 }
 
-addBubble('ai','Hi! Describe the scheduling problem, e.g. <b>"Smith is sick on Wednesday morning"</b> — I\'ll suggest the best replacement.');
+addBubble('ai','Hi! Tell me the scheduling problem, e.g. <b>"Smith is sick Wednesday"</b> — I\'ll suggest the best replacement based on hours worked.');
 
 render();
-
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js')}
 </script>
 </body>
