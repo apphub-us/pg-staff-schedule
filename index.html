@@ -236,6 +236,14 @@ function saveHours(n,di,val){
   if(val.trim()){state.schedule[hkey(n,di)]=val.trim();}
   else{delete state.schedule[hkey(n,di)];}
   save();
+  var empIdx=-1;
+  for(var i=0;i<state.employees.length;i++){if(state.employees[i].name===n){empIdx=i;break;}}
+  if(empIdx<0)return;
+  var totalEl=document.getElementById('total-'+empIdx);
+  if(totalEl){
+    var t=empTotalHours(state.employees[empIdx]);
+    totalEl.textContent=t>0?t+'h':'–';
+  }
 }
 
 function initials(name){return name.split(' ').map(function(w){return w[0]||''}).join('').slice(0,2).toUpperCase()}
@@ -300,11 +308,11 @@ function render(){
       var canHours=(s&&s!=='X'&&s!=='S');
       html+='<td style="padding:2px 3px"><button class="shift-btn '+s+'" onclick="cycleShift(\''+safe+'\','+d+')">'+SLABELS[s]+'</button>';
       if(canHours){
-        html+='<input class="hours-input" type="text" value="'+h+'" placeholder="7:00-15:00" onchange="saveHours(\''+safe+'\','+d+',this.value)" onclick="event.stopPropagation()">';
+        html+='<input class="hours-input" type="text" value="'+h+'" placeholder="7:00-15:00" onblur="saveHours(\''+safe+'\','+d+',this.value)" onclick="event.stopPropagation()">';
       }
       html+='</td>';
     }
-    html+='<td class="count-td">'+(totalH>0?totalH:'–')+'</td>';
+    html+='<td class="count-td" id="total-'+i+'">'+(totalH>0?totalH+'h':'–')+'</td>';
     html+='<td class="actions-td"><button class="icon-btn" onclick="editEmp('+i+')" aria-label="Edit">✎</button> <button class="icon-btn danger" onclick="deleteEmp('+i+')" aria-label="Delete">✕</button></td>';
     html+='</tr>';
   });
