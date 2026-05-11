@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -83,6 +83,10 @@ body{display:flex;flex-direction:column}
 .shift-btn:active{transform:scale(0.92)}
 
 /* Add employee */
+.icon-btn{background:none;border:1px solid var(--border);color:var(--muted);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.icon-btn:active{background:var(--surface2)}
+.icon-btn.danger{color:var(--red);border-color:var(--red-dim)}
+.icon-btn.danger:active{background:var(--red-dim)}
 .add-emp-bar{display:flex;gap:8px;padding:0 12px 12px}
 .add-emp-bar input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif}
 .add-emp-bar input::placeholder{color:var(--muted)}
@@ -143,9 +147,9 @@ body{display:flex;flex-direction:column}
 </div>
 
 <div class="tabs">
-  <button class="tab active" onclick="showView('schedule',this)">Grafik</button>
-  <button class="tab" onclick="showView('ai',this)">AI asystent</button>
-  <button class="tab" onclick="showView('stats',this);renderStats()">Statystyki</button>
+  <button class="tab active" onclick="showView('schedule',this)">Schedule</button>
+  <button class="tab" onclick="showView('ai',this)">AI Assistant</button>
+  <button class="tab" onclick="showView('stats',this);renderStats()">Statistics</button>
 </div>
 
 <div class="main">
@@ -154,14 +158,14 @@ body{display:flex;flex-direction:column}
   <div class="view active" id="view-schedule">
     <div class="schedule-wrap" id="sched-wrap"></div>
     <div class="legend">
-      <div class="leg"><div class="leg-dot" style="background:#1e3a5f;border:1px solid #3b82f6"></div>M rano</div>
-      <div class="leg"><div class="leg-dot" style="background:#14532d;border:1px solid #22c55e"></div>A popołudnie</div>
+      <div class="leg"><div class="leg-dot" style="background:#1e3a5f;border:1px solid #3b82f6"></div>M morning</div>
+      <div class="leg"><div class="leg-dot" style="background:#14532d;border:1px solid #22c55e"></div>A afternoon</div>
       <div class="leg"><div class="leg-dot" style="background:#3b0764;border:1px solid #a78bfa"></div>N noc</div>
-      <div class="leg"><div class="leg-dot" style="background:#451a03;border:1px solid #f59e0b"></div>W wolne</div>
-      <div class="leg"><div class="leg-dot" style="background:#450a0a;border:1px solid #ef4444"></div>CH chory</div>
+      <div class="leg"><div class="leg-dot" style="background:#451a03;border:1px solid #f59e0b"></div>O off</div>
+      <div class="leg"><div class="leg-dot" style="background:#450a0a;border:1px solid #ef4444"></div>SK sick</div>
     </div>
     <div class="add-emp-bar">
-      <input type="text" id="new-emp" placeholder="Dodaj pracownika..." />
+      <input type="text" id="new-emp" placeholder="Add employee..." />
       <button onclick="addEmp()">+</button>
     </div>
   </div>
@@ -170,7 +174,7 @@ body{display:flex;flex-direction:column}
   <div class="view" id="view-ai" style="height:calc(100vh - 120px);display:none;flex-direction:column">
     <div class="chat-msgs" id="chat-msgs"></div>
     <div class="chat-input-area">
-      <textarea id="chat-in" placeholder="np. Kowalski chory w środę..." rows="1"
+      <textarea id="chat-in" placeholder="e.g. Smith is sick on Wednesday..." rows="1"
         oninput="autoResize(this)"
         onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
       <button class="send-btn" onclick="sendMsg()">↑</button>
@@ -186,9 +190,9 @@ body{display:flex;flex-direction:column}
 
 <script>
 var SHIFTS = ['','M','A','N','X','S'];
-var SLABELS = {'':'–','M':'M','A':'A','N':'N','X':'W','S':'CH'};
-var SNAMES = {'M':'rano (6–14)','A':'popołudniowa (14–22)','N':'nocna (22–6)','X':'wolne','S':'choroba','':"brak"};
-var DAYS = ['Pon','Wt','Śr','Czw','Pt','Sob','Ndz'];
+var SLABELS = {'':'–','M':'M','A':'A','N':'N','X':'O','S':'SK'};
+var SNAMES = {'M':'morning (6–14)','A':'afternoon (14–22)','N':'night (22–6)','X':'off','S':'sick','':"none"};
+var DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 var state = JSON.parse(localStorage.getItem('pg_state') || 'null') || {
   employees: [
@@ -235,10 +239,14 @@ function render(){
   state.employees.forEach(function(emp){
     var count=0;
     for(var d=0;d<7;d++){var s=state.schedule[ekey(emp.name,d)]||'';if(s&&s!=='X'&&s!=='S')count++;}
+    var i=state.employees.indexOf(emp);
     html+='<div class="emp-card">';
     html+='<div class="emp-header"><div class="avatar">'+initials(emp.name)+'</div>';
     html+='<div class="emp-name">'+emp.name+'</div>';
-    html+='<div class="emp-stats">'+count+'d</div></div>';
+    html+='<div class="emp-stats">'+count+'d</div>';
+    html+='<button class="icon-btn" onclick="editEmp('+i+')" aria-label="Edit">✎</button>';
+    html+='<button class="icon-btn danger" onclick="deleteEmp('+i+')" aria-label="Delete">✕</button>';
+    html+='</div>';
     html+='<div class="days-row">';
     for(var d=0;d<7;d++){
       var k=ekey(emp.name,d),s=state.schedule[k]||'';
@@ -254,7 +262,31 @@ function render(){
   document.getElementById('sched-wrap').innerHTML=html;
 }
 
-function showView(id,tab){
+function editEmp(i){
+  var emp=state.employees[i];
+  var newName=prompt('Edit name:',emp.name);
+  if(!newName||!newName.trim())return;
+  newName=newName.trim();
+  if(newName===emp.name)return;
+  // migrate schedule keys
+  for(var d=0;d<7;d++){
+    var oldKey=ekey(emp.name,d),newKey=state.weekOff+'_'+newName+'_'+d;
+    if(state.schedule[oldKey]!==undefined){state.schedule[newKey]=state.schedule[oldKey];delete state.schedule[oldKey];}
+  }
+  state.employees[i].name=newName;
+  save();render();
+}
+
+function deleteEmp(i){
+  var emp=state.employees[i];
+  if(!confirm('Remove '+emp.name+' from the schedule?'))return;
+  // clean schedule
+  for(var d=0;d<7;d++){delete state.schedule[ekey(emp.name,d)];}
+  state.employees.splice(i,1);
+  save();render();
+}
+
+
   document.querySelectorAll('.view').forEach(function(v){v.style.display='none';v.classList.remove('active')});
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
   var el=document.getElementById('view-'+id);
@@ -276,19 +308,19 @@ function renderStats(){
   });
   var maxWork=Math.max.apply(null,empData.map(function(e){return e.work}))||1;
   var html='<div class="summary-grid">';
-  html+='<div class="summary-box"><div class="val">'+totals.total+'</div><div class="lbl">zmian w tygodniu</div></div>';
-  html+='<div class="summary-box"><div class="val" style="color:var(--red)">'+totals.S+'</div><div class="lbl">nieobecności</div></div>';
-  html+='<div class="summary-box"><div class="val" style="color:var(--accent)">'+totals.M+'</div><div class="lbl">zmian rannych</div></div>';
-  html+='<div class="summary-box"><div class="val" style="color:var(--green)">'+totals.A+'</div><div class="lbl">popołudniowych</div></div>';
+  html+='<div class="summary-box"><div class="val">'+totals.total+'</div><div class="lbl">shifts this week</div></div>';
+  html+='<div class="summary-box"><div class="val" style="color:var(--red)">'+totals.S+'</div><div class="lbl">absences</div></div>';
+  html+='<div class="summary-box"><div class="val" style="color:var(--accent)">'+totals.M+'</div><div class="lbl">morning shifts</div></div>';
+  html+='<div class="summary-box"><div class="val" style="color:var(--green)">'+totals.A+'</div><div class="lbl">afternoon shifts</div></div>';
   html+='</div>';
-  html+='<div class="stat-card"><div class="stat-card-title">Obciążenie pracowników</div>';
+  html+='<div class="stat-card"><div class="stat-card-title">Workload per employee</div>';
   empData.sort(function(a,b){return b.work-a.work}).forEach(function(e){
     var pct=Math.round(e.work/maxWork*100);
     html+='<div class="stat-row"><span>'+e.name+'</span><div class="stat-bar-wrap"><div class="stat-bar" style="width:'+pct+'%"></div></div><span class="stat-num">'+e.work+'</span></div>';
   });
   html+='</div>';
-  html+='<div class="stat-card"><div class="stat-card-title">Rozkład zmian</div>';
-  [{k:'M',label:'Ranne',c:'var(--accent)'},{k:'A',label:'Popołudniowe',c:'var(--green)'},{k:'N',label:'Nocne',c:'var(--purple)'},{k:'X',label:'Wolne',c:'var(--amber)'},{k:'S',label:'Choroba',c:'var(--red)'}].forEach(function(item){
+  html+='<div class="stat-card"><div class="stat-card-title">Shift distribution</div>';
+  [{k:'M',label:'Morning',c:'var(--accent)'},{k:'A',label:'Afternoon',c:'var(--green)'},{k:'N',label:'Night',c:'var(--purple)'},{k:'X',label:'Days off',c:'var(--amber)'},{k:'S',label:'Sick',c:'var(--red)'}].forEach(function(item){
     var pct=totals.total>0?Math.round((totals[item.k]||0)/totals.total*100):0;
     html+='<div class="stat-row"><span>'+item.label+'</span><div class="stat-bar-wrap"><div class="stat-bar" style="width:'+Math.max(pct,2)+'%;background:'+item.c+'"></div></div><span class="stat-num">'+(totals[item.k]||0)+'</span></div>';
   });
@@ -313,7 +345,7 @@ function addBubble(role,html){
 
 function getCtx(){
   var ws=getWS(state.weekOff);
-  var lines=['Tydzień: '+fd(ws)];
+  var lines=['Week: '+fd(ws)];
   state.employees.forEach(function(emp){
     var days=[];
     for(var d=0;d<7;d++){var s=state.schedule[ekey(emp.name,d)]||'';days.push(DAYS[d]+':'+(s?SNAMES[s]:'brak'))}
@@ -331,14 +363,14 @@ async function sendMsg(){
   addBubble('user',txt);
   var typing=addBubble('ai','<div class="typing-bubble"><span></span><span></span><span></span></div>');
 
-  var sys='Jesteś asystentem planowania grafiku pracy dla małej firmy elektrycznej PG.\n'+
+  var sys='You are a work schedule planning assistant for a small electrical company PG.\n'+
     'Masz dostęp do grafiku:\n'+getCtx()+'\n\n'+
     'Zasady:\n'+
-    '1. Gdy ktoś jest chory/nieobecny – zaproponuj konkretnego zastępnika z uzasadnieniem (obciążenie, preferencje zmiany, dni wolne w tygodniu).\n'+
-    '2. Bądź zwięzły – maks 4 zdania. Używaj imion. Nie wypisuj długich list.\n'+
-    '3. Możesz sugerować zmiany w formacie [ACTION:{"emp":"Jan Kowalski","day":2,"shift":"A","label":"Przypisz Jana w środę A"}]\n'+
-    '4. Odpowiadaj po polsku. Ton: konkretny, jak dobry brygadzista.\n'+
-    '5. Jeśli ktoś pyta o optymalizację – sprawdź kto ma za dużo/mało zmian.';
+    '1. When someone is sick/absent – suggest a specific replacement with reasoning (workload, shift preference, days off this week).\n'+
+    '2. Be concise – max 4 sentences. Use names. No long lists.\n'+
+    '3. You can suggest changes in format [ACTION:{"emp":"Jan Kowalski","day":2,"shift":"A","label":"Assign Jan Wednesday A"}]\n'+
+    '4. Reply in English. Tone: direct, like a good foreman.\n'+
+    '5. If someone asks about optimization – check who has too many/few shifts.';
 
   var msgs=chatHistory.concat([{role:'user',content:txt}]);
   try{
@@ -348,7 +380,7 @@ async function sendMsg(){
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,system:sys,messages:msgs})
     });
     var data=await r.json();
-    var aiText=data.content&&data.content[0]?data.content[0].text:'Błąd.';
+    var aiText=data.content&&data.content[0]?data.content[0].text:'Error.';
     chatHistory.push({role:'user',content:txt});
     chatHistory.push({role:'assistant',content:aiText});
     if(chatHistory.length>12)chatHistory=chatHistory.slice(-12);
@@ -366,7 +398,7 @@ async function sendMsg(){
       html+='</div>';
     }
     typing.innerHTML=html;
-  }catch(e){typing.innerHTML='Błąd połączenia.'}
+  }catch(e){typing.innerHTML='Connection error.'}
   document.getElementById('chat-msgs').scrollTop=99999;
   aiLoading=false;
 }
@@ -374,10 +406,10 @@ async function sendMsg(){
 function applyAction(emp,day,shift){
   state.schedule[ekey(emp,day)]=shift;
   save();render();
-  addBubble('ai','<b>Gotowe</b> — zmiana zaktualizowana w grafiku.');
+  addBubble('ai','<b>Done</b> — shift updated in the schedule.');
 }
 
-addBubble('ai','Cześć! Opisz problem grafiku, np. <b>"Kowalski chory w środę na ranne"</b> — zaproponuję zastępstwo.');
+addBubble('ai','Hi! Describe the scheduling problem, e.g. <b>"Smith is sick on Wednesday morning"</b> — I\'ll suggest the best replacement.');
 
 render();
 
